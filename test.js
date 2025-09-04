@@ -1,1 +1,1 @@
-#this is the test js
+console.log("Hello World");

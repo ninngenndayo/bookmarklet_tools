@@ -1,344 +1,258 @@
-// 永続化対応 - ページ移動でも残る半透明移動可能ボタン
 (function() {
-    'use strict';
-    
-    // グローバルスコープに設置して他のスクリプトから参照可能に
-    window.PersistentMovableButton = window.PersistentMovableButton || {};
-    
-    // 既に動作中の場合は停止
-    if (window.PersistentMovableButton.isRunning) {
-        window.PersistentMovableButton.stop();
-        return;
-    }
-
-    const PMB = window.PersistentMovableButton;
-    PMB.isRunning = true;
-    PMB.checkInterval = null;
-    PMB.button = null;
-    PMB.buttonInstance = null;
-
-    // 設定
-    const CONFIG = {
-        buttonId: 'persistent-movable-btn',
-        styleId: 'persistent-movable-styles',
-        checkIntervalMs: 1000, // 1秒ごとにチェック
-        emoji: '🚀',
-        position: { x: 50, y: 100 }, // 右上からの距離
-        storageKey: 'persistentMovableButton'
-    };
-
-    // CSSスタイル
-    const CSS_STYLES = `
-        .persistent-movable-button {
+  // 既存のコントローラーがあれば削除
+  var existing = document.getElementById('video-speed-controller');
+  if (existing) {
+    existing.remove();
+    return;
+  }
+  
+  // フローティングボタンとUIを作成
+  var controller = document.createElement('div');
+  controller.id = 'video-speed-controller';
+  controller.innerHTML = `
+        <div id="floating-btn" style="
             position: fixed;
-            width: 55px;
-            height: 55px;
-            background: linear-gradient(135deg, rgba(74, 144, 226, 0.85), rgba(155, 89, 182, 0.85));
-            border: 2px solid rgba(255, 255, 255, 0.9);
+            top: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            background: rgba(128, 128, 128, 0.8);
             border-radius: 50%;
-            cursor: move;
+            cursor: pointer;
+            z-index: 99999;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 22px;
+            font-size: 18px;
             color: white;
             user-select: none;
-            transition: all 0.2s ease;
-            backdrop-filter: blur(15px);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-            z-index: 999999;
-            font-family: 'Segoe UI', Arial, sans-serif;
-            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-        }
-
-        .persistent-movable-button:hover {
-            transform: scale(1.15);
-            box-shadow: 0 6px 30px rgba(0, 0, 0, 0.35);
-            background: linear-gradient(135deg, rgba(74, 144, 226, 0.95), rgba(155, 89, 182, 0.95));
-        }
-
-        .persistent-movable-button:active {
-            transform: scale(0.9);
-        }
-
-        .persistent-movable-button.dragging {
-            transition: none;
-            cursor: grabbing;
-            z-index: 1000000;
-            box-shadow: 0 8px 35px rgba(0, 0, 0, 0.4);
-        }
-
-        .persistent-movable-button.pulse {
-            animation: persistent-pulse 0.4s ease-in-out;
-        }
-
-        .persistent-toast {
+            touch-action: manipulation;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        ">⚡</div>
+        
+        <div id="speed-ui" style="
             position: fixed;
-            top: 20px;
+            top: 50%;
             left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 15px;
+            padding: 25px;
+            z-index: 100000;
             color: white;
-            padding: 12px 24px;
-            border-radius: 25px;
-            z-index: 1000001;
-            font-size: 14px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            opacity: 0;
-            animation: toast-show 0.3s ease forwards;
-        }
-
-        @keyframes persistent-pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.3); }
-        }
-
-        @keyframes toast-show {
-            from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
-            to { opacity: 1; transform: translateX(-50%) translateY(0); }
-        }
+            font-family: Arial, sans-serif;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: none;
+            width: 320px;
+            max-width: 90vw;
+        ">
+            <h3 style="margin: 0 0 20px 0; text-align: center; font-size: 18px;">動画再生速度調整</h3>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px;">スライダー:</label>
+                <input type="range" id="speed-slider" min="0.1" max="3.0" step="0.1" value="1.0" style="
+                    width: 100%;
+                    height: 8px;
+                    background: #333;
+                    outline: none;
+                    border-radius: 5px;
+                ">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #ccc; margin-top: 5px;">
+                    <span>0.1x</span>
+                    <span>3.0x</span>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 25px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px;">数値入力:</label>
+                <input type="number" id="speed-input" min="0.1" max="10" step="0.1" value="1.0" style="
+                    width: 100%;
+                    padding: 10px;
+                    border: none;
+                    border-radius: 8px;
+                    background: #333;
+                    color: white;
+                    font-size: 16px;
+                    box-sizing: border-box;
+                ">
+            </div>
+            
+            <div style="display: flex; gap: 10px;">
+                <button id="apply-speed" style="
+                    flex: 1;
+                    padding: 12px;
+                    background: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 16px;
+                    font-weight: bold;
+                ">決定</button>
+                
+                <button id="close-ui" style="
+                    flex: 1;
+                    padding: 12px;
+                    background: #f44336;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 16px;
+                    font-weight: bold;
+                ">閉じる</button>
+            </div>
+            
+            <div id="current-speed" style="
+                text-align: center;
+                margin-top: 15px;
+                font-size: 14px;
+                color: #ccc;
+            ">現在の速度: 1.0x</div>
+        </div>
     `;
-
-    // 移動可能ボタンクラス
-    class PersistentMovableButton {
-        constructor(element) {
-            this.element = element;
-            this.isDragging = false;
-            this.startX = 0;
-            this.startY = 0;
-            this.initialX = 0;
-            this.initialY = 0;
-            this.hasMoved = false;
-
-            this.init();
-        }
-
-        init() {
-            // イベントリスナー設定
-            this.element.addEventListener('mousedown', this.onStart.bind(this));
-            document.addEventListener('mousemove', this.onMove.bind(this));
-            document.addEventListener('mouseup', this.onEnd.bind(this));
-
-            this.element.addEventListener('touchstart', this.onStart.bind(this), { passive: false });
-            document.addEventListener('touchmove', this.onMove.bind(this), { passive: false });
-            document.addEventListener('touchend', this.onEnd.bind(this));
-
-            this.element.addEventListener('click', this.onClick.bind(this));
-            this.element.addEventListener('contextmenu', this.onContextMenu.bind(this));
-
-            // 保存された位置を復元
-            this.restorePosition();
-        }
-
-        onStart(e) {
-            this.isDragging = true;
-            this.hasMoved = false;
-            this.element.classList.add('dragging');
-
-            const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
-            const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
-
-            const rect = this.element.getBoundingClientRect();
-            this.startX = clientX - rect.left;
-            this.startY = clientY - rect.top;
-            this.initialX = rect.left;
-            this.initialY = rect.top;
-
-            e.preventDefault();
-        }
-
-        onMove(e) {
-            if (!this.isDragging) return;
-            e.preventDefault();
-
-            const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
-            const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
-
-            let newX = clientX - this.startX;
-            let newY = clientY - this.startY;
-
-            // 境界制限
-            const maxX = window.innerWidth - this.element.offsetWidth;
-            const maxY = window.innerHeight - this.element.offsetHeight;
-
-            newX = Math.max(0, Math.min(newX, maxX));
-            newY = Math.max(0, Math.min(newY, maxY));
-
-            this.element.style.left = newX + 'px';
-            this.element.style.top = newY + 'px';
-
-            if (Math.abs(newX - this.initialX) > 5 || Math.abs(newY - this.initialY) > 5) {
-                this.hasMoved = true;
-            }
-        }
-
-        onEnd(e) {
-            if (!this.isDragging) return;
-
-            this.isDragging = false;
-            this.element.classList.remove('dragging');
-            this.savePosition();
-        }
-
-        onClick(e) {
-            if (this.hasMoved) {
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-            }
-
-            this.element.classList.add('pulse');
-            setTimeout(() => {
-                this.element.classList.remove('pulse');
-            }, 400);
-
-            this.performAction();
-        }
-
-        onContextMenu(e) {
-            e.preventDefault();
-            if (confirm('永続化ボタンを停止しますか？\n（ページリロードでも再表示されなくなります）')) {
-                PMB.stop();
-            }
-        }
-
-        performAction() {
-            // ボタンの動作をここに記述
-            console.log("test")
-        }
-
-        showToast(message) {
-            // 既存のtoastを削除
-            const existingToast = document.querySelector('.persistent-toast');
-            if (existingToast) existingToast.remove();
-
-            const toast = document.createElement('div');
-            toast.className = 'persistent-toast';
-            toast.textContent = message;
-            document.body.appendChild(toast);
-
-            setTimeout(() => {
-                if (toast.parentNode) toast.remove();
-            }, 3000);
-        }
-
-        savePosition() {
-            try {
-                const rect = this.element.getBoundingClientRect();
-                const data = PMB.loadData();
-                data.position = { x: rect.left, y: rect.top };
-                data.lastUrl = window.location.href;
-                PMB.saveData(data);
-            } catch(e) {}
-        }
-
-        restorePosition() {
-            try {
-                const data = PMB.loadData();
-                if (data.position) {
-                    this.element.style.left = data.position.x + 'px';
-                    this.element.style.top = data.position.y + 'px';
-                }
-            } catch(e) {}
-        }
-    }
-
-    // ユーティリティ関数
-    PMB.loadData = function() {
-        try {
-            const data = localStorage.getItem(CONFIG.storageKey);
-            return data ? JSON.parse(data) : { enabled: true };
-        } catch(e) {
-            return { enabled: true };
-        }
-    };
-
-    PMB.saveData = function(data) {
-        try {
-            localStorage.setItem(CONFIG.storageKey, JSON.stringify(data));
-        } catch(e) {}
-    };
-
-    PMB.createButton = function() {
-        if (document.getElementById(CONFIG.buttonId)) return;
-
-        const button = document.createElement('div');
-        button.id = CONFIG.buttonId;
-        button.className = 'persistent-movable-button';
-        button.innerHTML = CONFIG.emoji;
-        button.title = 'ドラッグで移動 | 右クリックで停止';
-        
-        // 初期位置設定
-        button.style.right = CONFIG.position.x + 'px';
-        button.style.top = CONFIG.position.y + 'px';
-
-        document.body.appendChild(button);
-        
-        PMB.button = button;
-        PMB.buttonInstance = new PersistentMovableButton(button);
-        
-        return button;
-    };
-
-    PMB.addStyles = function() {
-        if (document.getElementById(CONFIG.styleId)) return;
-        
-        const style = document.createElement('style');
-        style.id = CONFIG.styleId;
-        style.textContent = CSS_STYLES;
-        document.head.appendChild(style);
-    };
-
-    PMB.checkAndRestore = function() {
-        const data = PMB.loadData();
-        if (!data.enabled) {
-            PMB.stop();
-            return;
-        }
-
-        if (!document.getElementById(CONFIG.buttonId)) {
-            PMB.addStyles();
-            PMB.createButton();
-        }
-    };
-
-    PMB.start = function() {
-        PMB.checkAndRestore();
-        PMB.checkInterval = setInterval(PMB.checkAndRestore, CONFIG.checkIntervalMs);
-    };
-
-    PMB.stop = function() {
-        PMB.isRunning = false;
-        
-        if (PMB.checkInterval) {
-            clearInterval(PMB.checkInterval);
-            PMB.checkInterval = null;
-        }
-
-        const button = document.getElementById(CONFIG.buttonId);
-        if (button) button.remove();
-
-        const style = document.getElementById(CONFIG.styleId);
-        if (style) style.remove();
-
-        // 無効化フラグを保存
-        const data = PMB.loadData();
-        data.enabled = false;
-        PMB.saveData(data);
-
-        PMB.button = null;
-        PMB.buttonInstance = null;
-    };
-
-    // 初期化と開始
-    PMB.start();
+  
+  document.body.appendChild(controller);
+  
+  // 要素の取得
+  var floatingBtn = document.getElementById('floating-btn');
+  var speedUI = document.getElementById('speed-ui');
+  var speedSlider = document.getElementById('speed-slider');
+  var speedInput = document.getElementById('speed-input');
+  var applyBtn = document.getElementById('apply-speed');
+  var closeBtn = document.getElementById('close-ui');
+  var currentSpeedDisplay = document.getElementById('current-speed');
+  
+  // ドラッグ機能の実装
+  var isDragging = false;
+  var hasMoved = false;
+  var startX, startY, startTop, startLeft;
+  
+  function startDrag(e) {
+    isDragging = true;
+    hasMoved = false;
+    var touch = e.touches ? e.touches[0] : e;
+    startX = touch.clientX;
+    startY = touch.clientY;
     
-    // 初回メッセージ
-    setTimeout(() => {
-        if (PMB.buttonInstance) {
-            PMB.buttonInstance.showToast('🚀 永続化ボタンを追加！ページ移動後も表示されます');
-        }
-    }, 500);
-
+    var rect = floatingBtn.getBoundingClientRect();
+    startTop = rect.top;
+    startLeft = rect.left;
+    
+    floatingBtn.style.transition = 'none';
+    e.preventDefault();
+  }
+  
+  function drag(e) {
+    if (!isDragging) return;
+    
+    var touch = e.touches ? e.touches[0] : e;
+    var deltaX = touch.clientX - startX;
+    var deltaY = touch.clientY - startY;
+    
+    // 5px以上動いたらドラッグとみなす
+    if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+      hasMoved = true;
+    }
+    
+    var newTop = Math.max(0, Math.min(window.innerHeight - 60, startTop + deltaY));
+    var newLeft = Math.max(0, Math.min(window.innerWidth - 60, startLeft + deltaX));
+    
+    floatingBtn.style.top = newTop + 'px';
+    floatingBtn.style.right = 'auto';
+    floatingBtn.style.left = newLeft + 'px';
+    e.preventDefault();
+  }
+  
+  function endDrag(e) {
+    if (isDragging) {
+      isDragging = false;
+      floatingBtn.style.transition = 'all 0.3s ease';
+      
+      // ドラッグしていない場合はUIを表示/非表示
+      if (!hasMoved) {
+        setTimeout(function() {
+          speedUI.style.display = speedUI.style.display === 'none' || speedUI.style.display === '' ? 'block' : 'none';
+        }, 10);
+      }
+    }
+  }
+  
+  // マウスイベント
+  floatingBtn.addEventListener('mousedown', startDrag);
+  document.addEventListener('mousemove', drag);
+  document.addEventListener('mouseup', endDrag);
+  
+  // タッチイベント
+  floatingBtn.addEventListener('touchstart', startDrag, { passive: false });
+  document.addEventListener('touchmove', drag, { passive: false });
+  document.addEventListener('touchend', endDrag);
+  
+  // スライダーと入力欄の同期
+  speedSlider.addEventListener('input', function() {
+    speedInput.value = this.value;
+  });
+  
+  speedInput.addEventListener('input', function() {
+    var value = parseFloat(this.value);
+    if (value >= 0.1 && value <= 3.0) {
+      speedSlider.value = value;
+    }
+  });
+  
+  // 動画速度変更関数
+  function changeVideoSpeed(speed) {
+    var videos = document.querySelectorAll('video');
+    var changed = 0;
+    
+    videos.forEach(function(video) {
+      video.playbackRate = speed;
+      changed++;
+    });
+    
+    currentSpeedDisplay.textContent = '現在の速度: ' + speed + 'x (' + changed + '個の動画)';
+    
+    if (changed === 0) {
+      currentSpeedDisplay.textContent = '動画が見つかりませんでした';
+      currentSpeedDisplay.style.color = '#ff9800';
+    } else {
+      currentSpeedDisplay.style.color = '#4CAF50';
+    }
+  }
+  
+  // 決定ボタン
+  applyBtn.addEventListener('click', function() {
+    var speed = parseFloat(speedInput.value);
+    if (speed > 0) {
+      changeVideoSpeed(speed);
+    } else {
+      alert('0より大きい数値を入力してください');
+    }
+  });
+  
+  // 閉じるボタン
+  closeBtn.addEventListener('click', function() {
+    speedUI.style.display = 'none';
+  });
+  
+  // UIの外をクリックしたら閉じる
+  document.addEventListener('click', function(e) {
+    if (speedUI.style.display === 'block' &&
+      !speedUI.contains(e.target) &&
+      !floatingBtn.contains(e.target)) {
+      speedUI.style.display = 'none';
+    }
+  });
+  
+  // 初期状態の動画速度を表示
+  setTimeout(function() {
+    var videos = document.querySelectorAll('video');
+    if (videos.length > 0) {
+      currentSpeedDisplay.textContent = '現在の速度: ' + videos[0].playbackRate + 'x (' + videos.length + '個の動画)';
+    }
+  }, 500);
+  
+  // デバッグ用：ボタンを強制的に表示
+  console.log('動画速度コントローラーが読み込まれました');
+  
 })();

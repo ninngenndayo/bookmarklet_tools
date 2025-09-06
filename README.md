@@ -1,1 +1,3 @@
-# bookmarklet_tools
+# bookmarklet_tool
+このリポジトリは個人のテスト用です
+AIを利用したコードやテストをしていないコードが含まてえます

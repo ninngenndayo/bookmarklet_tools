@@ -1,3 +1,4 @@
+alert('test');
 (function() {
   // 既存のコントローラーがあれば削除
   var existing = document.getElementById('video-speed-controller');
